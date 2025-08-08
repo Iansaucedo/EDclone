@@ -1,3 +1,6 @@
+#include <sys/types.h>
+
+// Forward declarations for static functions used before their definition
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +13,8 @@ typedef struct
   size_t buffer_length;
   ssize_t input_length;
 } InputBuffer;
+
+static void close_input_buffer(InputBuffer *input_buffer);
 
 typedef struct Line
 {
