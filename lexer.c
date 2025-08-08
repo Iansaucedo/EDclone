@@ -12,8 +12,8 @@ typedef struct
 
 typedef enum
 {
-  COMMAND_SUCCES,
-  COMMAND_UNREGORNIZED
+  COMMAND_SUCCESS,
+  COMMAND_UNRECOGNIZED
 } CommandResult;
 
 typedef enum
@@ -42,6 +42,49 @@ InputBuffer *new_input_buffer()
   input_buffer->input_length = 0;
 
   return input_buffer;
+}
+
+CommandResult do_meta_command(InputBuffer *input_buffer)
+{
+  if (strcmp(input_buffer->buffer, ".exit") == 0)
+  {
+    close_input_buffer(input_buffer);
+    exit(EXIT_SUCCESS);
+  }
+  else
+  {
+    return COMMAND_UNRECOGNIZED;
+  }
+}
+
+PrepareResult prepare_statement(InputBuffer *input_buffer,
+                                Statement *statement)
+{
+  if (strncmp(input_buffer->buffer, "w", 4) == 0)
+  {
+    statement->type = STATEMENT_SAVE;
+    return SUCCESS;
+  }
+  if (strcmp(input_buffer->buffer, "p") == 0)
+  {
+    statement->type = STATEMENT_PICKLINE;
+    return SUCCESS;
+  }
+
+  return UNRECOGNIZED_STATEMENT;
+}
+
+void execute_statement(Statement *statement)
+{
+  switch (statement->type)
+  {
+  case (STATEMENT_SAVE):
+    printf("This is where we would do a save.\n");
+    break;
+  case (STATEMENT_PICKLINE):
+    printf("This is where we would do a pickline.\n");
+    break;
+  }
 }
 
 void print_prompt() { printf("> "); }
@@ -75,14 +118,30 @@ int main(int argc, char *argv[])
     print_prompt();
     read_input(input_buffer);
 
-    if (strcmp(input_buffer->buffer, ".exit") == 0)
+    if (input_buffer->buffer[0] == '.')
     {
-      close_input_buffer(input_buffer);
-      exit(EXIT_SUCCESS);
+      switch (do_meta_command(input_buffer))
+      {
+      case (COMMAND_SUCCESS):
+        continue;
+      case (COMMAND_UNRECOGNIZED):
+        printf("Unrecognized command '%s'\n", input_buffer->buffer);
+        continue;
+      }
     }
-    else
+
+    Statement statement;
+    switch (prepare_statement(input_buffer, &statement))
     {
-      printf("Unrecognized command '%s'.\n", input_buffer->buffer);
+    case (SUCCESS):
+      break;
+    case (UNRECOGNIZED_STATEMENT):
+      printf("Unrecognized keyword at start of '%s'.\n",
+             input_buffer->buffer);
+      continue;
     }
+
+    execute_statement(&statement);
+    printf("Executed.\n");
   }
 }
