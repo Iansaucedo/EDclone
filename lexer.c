@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
 typedef struct
 {
@@ -45,15 +46,14 @@ typedef enum
   UNRECOGNIZED_STATEMENT
 } PrepareResult;
 
-Line *head = NULL;
+static Line *head = NULL;
 
-void append_line(const char *text)
+// Append a new line to the end of the list
+static void append_line(const char *text)
 {
   Line *new_line = malloc(sizeof(Line));
   new_line->text = strdup(text);
   new_line->next = NULL;
-  // Assign line number
-  int max_num = 1;
   Line *current = head;
   if (head == NULL)
   {
@@ -71,7 +71,8 @@ void append_line(const char *text)
   }
 }
 
-void find_line(int line_number)
+// Print a specific line by number
+static void find_line(int line_number)
 {
   Line *current = head;
   while (current != NULL)
@@ -86,7 +87,8 @@ void find_line(int line_number)
   printf("Line %d not found.\n", line_number);
 }
 
-edit_line(int line_number, const char *new_text)
+// Edit a line's text by number
+static void edit_line(int line_number, const char *new_text)
 {
   Line *current = head;
   while (current != NULL)
@@ -102,7 +104,8 @@ edit_line(int line_number, const char *new_text)
   printf("Line %d not found for editing.\n", line_number);
 }
 
-void delete_line(int line_number)
+// Delete a line by number and reindex
+static void delete_line(int line_number)
 {
   Line *current = head;
   Line *prev = NULL;
@@ -121,6 +124,14 @@ void delete_line(int line_number)
       free(current->text);
       free(current);
       printf("Line %d deleted.\n", line_number);
+      // Reindex line numbers
+      Line *iter = head;
+      int idx = 1;
+      while (iter != NULL)
+      {
+        iter->line_number = idx++;
+        iter = iter->next;
+      }
       return;
     }
     prev = current;
@@ -129,7 +140,8 @@ void delete_line(int line_number)
   printf("Line %d not found for deletion.\n", line_number);
 }
 
-void print_lines()
+// Print all lines
+static void print_lines(void)
 {
   Line *current = head;
   while (current != NULL)
@@ -139,7 +151,8 @@ void print_lines()
   }
 }
 
-void free_lines()
+// Free all lines
+static void free_lines(void)
 {
   Line *current = head;
   while (current != NULL)
@@ -152,30 +165,29 @@ void free_lines()
   head = NULL;
 }
 
-InputBuffer *new_input_buffer()
+// Create a new input buffer
+static InputBuffer *new_input_buffer(void)
 {
   InputBuffer *input_buffer = malloc(sizeof(InputBuffer));
   input_buffer->buffer = NULL;
   input_buffer->buffer_length = 0;
   input_buffer->input_length = 0;
-
   return input_buffer;
 }
 
-CommandResult do_meta_command(InputBuffer *input_buffer)
+// Handle meta commands (starting with '.')
+static CommandResult do_meta_command(InputBuffer *input_buffer)
 {
   if (strcmp(input_buffer->buffer, ".exit") == 0)
   {
     close_input_buffer(input_buffer);
     exit(EXIT_SUCCESS);
   }
-  else
-  {
-    return COMMAND_UNRECOGNIZED;
-  }
+  return COMMAND_UNRECOGNIZED;
 }
 
-PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
+// Parse user input into a statement
+static PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
 {
   if (strncmp(input_buffer->buffer, "-w", 2) == 0)
   {
@@ -229,7 +241,8 @@ PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
   return UNRECOGNIZED_STATEMENT;
 }
 
-void execute_statement(Statement *statement)
+// Execute a parsed statement
+static void execute_statement(Statement *statement)
 {
   switch (statement->type)
   {
@@ -252,33 +265,32 @@ void execute_statement(Statement *statement)
   }
 }
 
-void print_prompt() { printf("> "); }
+static void print_prompt(void) { printf("> "); }
 
-void read_input(InputBuffer *input_buffer)
+// Read a line of input from stdin
+static void read_input(InputBuffer *input_buffer)
 {
-  ssize_t bytes_read =
-      getline(&(input_buffer->buffer), &(input_buffer->buffer_length), stdin);
-
+  ssize_t bytes_read = getline(&(input_buffer->buffer), &(input_buffer->buffer_length), stdin);
   if (bytes_read <= 0)
   {
     printf("Error reading input\n");
     exit(EXIT_FAILURE);
   }
-
   input_buffer->input_length = bytes_read - 1;
   input_buffer->buffer[bytes_read - 1] = 0;
 }
 
-void close_input_buffer(InputBuffer *input_buffer)
+// Free the input buffer
+static void close_input_buffer(InputBuffer *input_buffer)
 {
   free(input_buffer->buffer);
   free(input_buffer);
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
   InputBuffer *input_buffer = new_input_buffer();
-  while (true)
+  while (1)
   {
     print_prompt();
     read_input(input_buffer);
@@ -287,9 +299,9 @@ int main(int argc, char *argv[])
     {
       switch (do_meta_command(input_buffer))
       {
-      case (COMMAND_SUCCESS):
+      case COMMAND_SUCCESS:
         continue;
-      case (COMMAND_UNRECOGNIZED):
+      case COMMAND_UNRECOGNIZED:
         printf("Unrecognized command '%s'\n", input_buffer->buffer);
         continue;
       }
@@ -300,14 +312,12 @@ int main(int argc, char *argv[])
       Statement statement;
       switch (prepare_statement(input_buffer, &statement))
       {
-      case (SUCCESS):
+      case SUCCESS:
         break;
-      case (UNRECOGNIZED_STATEMENT):
-        printf("Unrecognized keyword at start of '%s'.\n",
-               input_buffer->buffer);
+      case UNRECOGNIZED_STATEMENT:
+        printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
         continue;
       }
-
       execute_statement(&statement);
       printf("Executed.\n");
     }
