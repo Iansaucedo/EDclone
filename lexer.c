@@ -38,6 +38,7 @@ typedef struct
   StatementType type;
   int line_number;
   char *edit_text;
+  char *filename;
 } Statement;
 
 typedef enum
@@ -176,6 +177,30 @@ static InputBuffer *new_input_buffer(void)
 }
 
 // Handle meta commands (starting with '.')
+// Open a document from a file
+static void open_document(const char *filename)
+{
+  FILE *file = fopen(filename, "r");
+  if (!file)
+  {
+    printf("Could not open file: %s\n", filename);
+    return;
+  }
+  free_lines();
+  char *line = NULL;
+  size_t len = 0;
+  ssize_t read;
+  while ((read = getline(&line, &len, file)) != -1)
+  {
+    if (read > 0 && line[read - 1] == '\n')
+      line[read - 1] = '\0';
+    append_line(line);
+  }
+  free(line);
+  fclose(file);
+  printf("Opened document: %s\n", filename);
+}
+
 static CommandResult do_meta_command(InputBuffer *input_buffer)
 {
   if (strcmp(input_buffer->buffer, ".exit") == 0)
@@ -183,14 +208,42 @@ static CommandResult do_meta_command(InputBuffer *input_buffer)
     close_input_buffer(input_buffer);
     exit(EXIT_SUCCESS);
   }
+  if (strncmp(input_buffer->buffer, ".open ", 6) == 0)
+  {
+    char *filename = input_buffer->buffer + 6;
+    while (*filename == ' ')
+      filename++;
+    if (*filename)
+    {
+      open_document(filename);
+      return COMMAND_SUCCESS;
+    }
+    else
+    {
+      printf("No filename provided to open.\n");
+      return COMMAND_SUCCESS;
+    }
+  }
   return COMMAND_UNRECOGNIZED;
 }
 
 // Parse user input into a statement
 static PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
 {
+  statement->filename = NULL;
   if (strncmp(input_buffer->buffer, "-w", 2) == 0)
   {
+    char *rest = input_buffer->buffer + 2;
+    while (*rest == ' ')
+      rest++;
+    if (*rest)
+    {
+      statement->filename = strdup(rest);
+    }
+    else
+    {
+      statement->filename = strdup("document.txt");
+    }
     statement->type = STATEMENT_SAVE;
     return SUCCESS;
   }
@@ -217,7 +270,6 @@ static PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *sta
     {
       statement->type = STATEMENT_EDITLINE;
       statement->line_number = num;
-      // Skip to the new text
       rest = strchr(input_buffer->buffer + 3, ' ');
       if (rest)
       {
@@ -242,12 +294,35 @@ static PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *sta
 }
 
 // Execute a parsed statement
+// Save all lines to a file
+static void save_document(const char *filename)
+{
+  FILE *file = fopen(filename, "w");
+  if (!file)
+  {
+    printf("Could not open file for writing: %s\n", filename);
+    return;
+  }
+  Line *current = head;
+  while (current != NULL)
+  {
+    fprintf(file, "%s\n", current->text);
+    current = current->next;
+  }
+  fclose(file);
+  printf("Saved document to: %s\n", filename);
+}
+
 static void execute_statement(Statement *statement)
 {
   switch (statement->type)
   {
   case STATEMENT_SAVE:
-    printf("This is where we would do a save.\n");
+    if (statement->filename)
+    {
+      save_document(statement->filename);
+      free(statement->filename);
+    }
     break;
   case STATEMENT_PICKLINE:
     print_lines();
