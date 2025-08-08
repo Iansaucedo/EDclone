@@ -26,13 +26,17 @@ typedef enum
 typedef enum
 {
   STATEMENT_SAVE,
-  STATEMENT_PICKLINE
+  STATEMENT_PICKLINE,
+  STATEMENT_FINDLINE,
+  STATEMENT_EDITLINE,
+  STATEMENT_DELETELINE
 } StatementType;
 
 typedef struct
 {
   StatementType type;
-
+  int line_number;
+  char *edit_text;
 } Statement;
 
 typedef enum
@@ -48,18 +52,21 @@ void append_line(const char *text)
   Line *new_line = malloc(sizeof(Line));
   new_line->text = strdup(text);
   new_line->next = NULL;
-
+  // Assign line number
+  int max_num = 1;
+  Line *current = head;
   if (head == NULL)
   {
+    new_line->line_number = 1;
     head = new_line;
   }
   else
   {
-    Line *current = head;
     while (current->next != NULL)
     {
       current = current->next;
     }
+    new_line->line_number = current->line_number + 1;
     current->next = new_line;
   }
 }
@@ -95,13 +102,39 @@ edit_line(int line_number, const char *new_text)
   printf("Line %d not found for editing.\n", line_number);
 }
 
+void delete_line(int line_number)
+{
+  Line *current = head;
+  Line *prev = NULL;
+  while (current != NULL)
+  {
+    if (current->line_number == line_number)
+    {
+      if (prev == NULL)
+      {
+        head = current->next;
+      }
+      else
+      {
+        prev->next = current->next;
+      }
+      free(current->text);
+      free(current);
+      printf("Line %d deleted.\n", line_number);
+      return;
+    }
+    prev = current;
+    current = current->next;
+  }
+  printf("Line %d not found for deletion.\n", line_number);
+}
+
 void print_lines()
 {
   Line *current = head;
-  int line_num = 1;
   while (current != NULL)
   {
-    printf("%s\n", current->text);
+    printf("%d: %s\n", current->line_number, current->text);
     current = current->next;
   }
 }
@@ -142,10 +175,9 @@ CommandResult do_meta_command(InputBuffer *input_buffer)
   }
 }
 
-PrepareResult prepare_statement(InputBuffer *input_buffer,
-                                Statement *statement)
+PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
 {
-  if (strncmp(input_buffer->buffer, "-w", 4) == 0)
+  if (strncmp(input_buffer->buffer, "-w", 2) == 0)
   {
     statement->type = STATEMENT_SAVE;
     return SUCCESS;
@@ -155,7 +187,45 @@ PrepareResult prepare_statement(InputBuffer *input_buffer,
     statement->type = STATEMENT_PICKLINE;
     return SUCCESS;
   }
-
+  if (strncmp(input_buffer->buffer, "-f ", 3) == 0)
+  {
+    int num;
+    if (sscanf(input_buffer->buffer, "-f %d", &num) == 1)
+    {
+      statement->type = STATEMENT_FINDLINE;
+      statement->line_number = num;
+      return SUCCESS;
+    }
+  }
+  if (strncmp(input_buffer->buffer, "-e ", 3) == 0)
+  {
+    int num;
+    char *rest = strchr(input_buffer->buffer + 3, ' ');
+    if (rest && sscanf(input_buffer->buffer, "-e %d", &num) == 1)
+    {
+      statement->type = STATEMENT_EDITLINE;
+      statement->line_number = num;
+      // Skip to the new text
+      rest = strchr(input_buffer->buffer + 3, ' ');
+      if (rest)
+      {
+        while (*rest == ' ')
+          rest++;
+        statement->edit_text = strdup(rest);
+        return SUCCESS;
+      }
+    }
+  }
+  if (strncmp(input_buffer->buffer, "-d ", 3) == 0)
+  {
+    int num;
+    if (sscanf(input_buffer->buffer, "-d %d", &num) == 1)
+    {
+      statement->type = STATEMENT_DELETELINE;
+      statement->line_number = num;
+      return SUCCESS;
+    }
+  }
   return UNRECOGNIZED_STATEMENT;
 }
 
@@ -163,11 +233,21 @@ void execute_statement(Statement *statement)
 {
   switch (statement->type)
   {
-  case (STATEMENT_SAVE):
+  case STATEMENT_SAVE:
     printf("This is where we would do a save.\n");
     break;
-  case (STATEMENT_PICKLINE):
+  case STATEMENT_PICKLINE:
     print_lines();
+    break;
+  case STATEMENT_FINDLINE:
+    find_line(statement->line_number);
+    break;
+  case STATEMENT_EDITLINE:
+    edit_line(statement->line_number, statement->edit_text);
+    free(statement->edit_text);
+    break;
+  case STATEMENT_DELETELINE:
+    delete_line(statement->line_number);
     break;
   }
 }
